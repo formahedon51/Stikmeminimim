@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>STICKMAN CO-OP</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;}
+  body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#c9d1dc;user-select:none;-webkit-user-select:none;}
+  #c{display:block;position:fixed;inset:0;}
+  .hidden{display:none !important;}
+
+  #hud{position:fixed;top:0;left:0;right:0;padding:14px 22px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;font-size:15px;letter-spacing:1px;pointer-events:none;text-shadow:0 0 10px rgba(0,0,0,.9);}
+  .stack{display:flex;flex-direction:column;gap:5px;}
+  .bar-wrap{display:flex;align-items:center;gap:8px;}
+  .lbl{font-size:10px;opacity:.55;letter-spacing:2px;min-width:44px;}
+  .lbl b{font-weight:400;color:#c9d1dc;margin-left:2px;}
+  .bar{width:180px;height:10px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.06);border:1px solid rgba(160,180,200,.16);}
+  .bar i{display:block;height:100%;width:100%;transition:width .12s linear;}
+  .bar.hp1 i{background:linear-gradient(90deg,#2f7fd6,#5fb2ff);box-shadow:0 0 10px rgba(74,163,255,.5);}
+  .bar.hp2 i{background:linear-gradient(90deg,#2e8f57,#4affa0);box-shadow:0 0 10px rgba(74,255,160,.45);}
+  .bar.xp  i{background:linear-gradient(90deg,#7a5bcc,#b79cff);box-shadow:0 0 10px rgba(183,156,255,.4);}
+  .num{font-size:12px;opacity:.6;min-width:44px;}
+  .center{display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:2px;}
+  #waveLbl{font-size:14px;letter-spacing:4px;opacity:.8;}
+  #genLbl{font-size:11px;letter-spacing:2px;opacity:.55;}
+  #genLbl b{color:#4affa0;font-weight:400;}
+  .right{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
+  .res{font-size:13px;opacity:.8;}
+  .res b{font-weight:400;color:#e8eef7;}
+  .res.coin{color:#e8c15a;} .res.coin b{color:#f0d27a;}
+
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;background:radial-gradient(circle at 50% 45%, rgba(18,20,26,.96), rgba(2,3,4,.99));padding:24px;z-index:50;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  .overlay.show{opacity:1;pointer-events:auto;}
+  .overlay h1{font-size:clamp(26px,5.5vw,52px);letter-spacing:10px;font-weight:700;color:#e8eef7;text-shadow:0 0 26px rgba(74,163,255,.5);}
+  .overlay h1 .ai{color:#4affa0;text-shadow:0 0 26px rgba(74,255,160,.55);}
+  .overlay p{font-size:13.5px;line-height:1.9;opacity:.65;max-width:640px;letter-spacing:.4px;}
+  .config{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;background:rgba(20,24,30,.6);border:1px solid rgba(120,150,180,.2);padding:16px 22px;border-radius:10px;margin-top:4px;}
+  .config label{display:flex;flex-direction:column;gap:6px;align-items:flex-start;font-size:11px;opacity:.65;letter-spacing:2px;}
+  .config input{background:rgba(0,0,0,.5);color:#e8eef7;border:1px solid rgba(120,150,180,.35);border-radius:6px;padding:8px 12px;font-family:inherit;font-size:16px;width:180px;text-align:center;outline:none;text-transform:uppercase;}
+  .config input:focus{border-color:rgba(74,163,255,.7);box-shadow:0 0 12px rgba(74,163,255,.25);}
+  .btnrow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:6px;}
+  .overlay button{font-family:inherit;font-size:14px;letter-spacing:3px;padding:14px 30px;border-radius:8px;cursor:pointer;text-transform:uppercase;color:#c6ffe0;background:rgba(74,255,160,.08);border:1px solid rgba(74,255,160,.55);transition:.18s;}
+  .overlay button:hover{background:rgba(74,255,160,.2);box-shadow:0 0 28px rgba(74,255,160,.35);}
+  .overlay button.alt{color:#cfe6ff;border-color:rgba(74,163,255,.55);background:rgba(74,163,255,.08);}
+  .overlay button.alt:hover{background:rgba(74,163,255,.2);box-shadow:0 0 28px rgba(74,163,255,.35);}
+  .overlay button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+  .code{font-size:32px;font-weight:bold;letter-spacing:8px;color:#ffd54f;user-select:all;font-family:ui-monospace,monospace;}
+  #menuStatus,#lobbyStatus{font-size:13px;opacity:.7;letter-spacing:1px;min-height:20px;line-height:1.6;max-width:520px;}
+  #menuStatus.err,#lobbyStatus.err{color:#ff8a8a;}
+  #menuStatus.warn,#lobbyStatus.warn{color:#ffd54f;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="stack">
+    <div class="bar-wrap">
+      <span class="lbl">P1</span>
+      <div class="bar hp1"><i id="p1hp"></i></div>
+      <span class="num" id="p1hpN">100</span>
+    </div>
+    <div class="bar-wrap">
+      <span class="lbl">P2</span>
+      <div class="bar hp2"><i id="p2hp"></i></div>
+      <span class="num" id="p2hpN">100</span>
+    </div>
+    <div class="bar-wrap"><span class="lbl">LV<b id="lvlNum">1</b></span><div class="bar xp"><i id="xpFill"></i></div><span class="num" id="xpNum">0/30</span></div>
+  </div>
+  <div class="center">
+    <div id="waveLbl">ВОЛНА 1</div>
+    <div id="genLbl">ОЧКИ <b>0</b></div>
+  </div>
+  <div class="right">
+    <div class="res coin">◆ <b id="coinNum">0</b></div>
+    <div class="res score">★ <b id="scoreNum">0</b></div>
+  </div>
+</div>
+
+<div id="menu" class="overlay show">
+  <h1>STICKMAN <span class="ai">CO-OP</span></h1>
+  <p>Два игрока против волн врагов. Создай комнату и передай код другу, или введи код для подключения.</p>
+  <div class="config">
+    <label>ИМЯ <input type="text" id="nameInput" value="Игрок" maxlength="12"></label>
+  </div>
+  <div class="btnrow">
+    <button id="btnCreate">СОЗДАТЬ КОМНАТУ</button>
+  </div>
+  <div class="config">
+    <label>КОД КОМНАТЫ <input type="text" id="codeInput" placeholder="XXXXXX" maxlength="6"></label>
+  </div>
+  <div class="btnrow">
+    <button id="btnJoin" class="alt">ВОЙТИ ПО КОДУ</button>
+  </div>
+  <div id="menuStatus"></div>
+</div>
+
+<div id="lobby" class="overlay">
+  <h1>КОМНАТА</h1>
+  <p>Передай другу код:</p>
+  <div class="code" id="roomCode">------</div>
+  <button id="btnCopy">СКОПИРОВАТЬ</button>
+  <div id="lobbyStatus">Ожидание второго игрока…</div>
+</div>
+
+<script>
+"use strict";
+/* ================================ CONSTANTS ================================ */
+const VW = 1280, VH = 720, FLOOR_Y = 640, WALL = 22, GRAV = 2000;
+const TRAIL_LIFE = 0.22;
+const MAX_ACTIVE_ENEMIES = 7;
+const SPAWN_INTERVAL = 0.25;
+const WAVE_TIME_LIMIT = 180;
+const MAX_PARTICLES = 500;
+const SUBSTEP_PX = 6;
+const NET_RATE = 1/30;
+const MAX_TRAIL_SEGMENTS = 8;
+
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp = (a,b,t) => a + (b-a)*t;
+const aabb = (a,b) => a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+const dist2 = (ax,ay,bx,by) => { const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; };
+
+let fpsAcc = 0, fpsCount = 0, fpsDisplay = 0;
+
+/* ================================ CANVAS ================================ */
+const canvas = $('c');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
+
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  scale = Math.min(W / VW, H / VH);
+  offX = (W - VW * scale) / 2;
+  offY = (H - VH * scale) / 2;
+}
+window.addEventListener('resize', resize);
+
+/* ================================ ROOM ================================ */
+const platforms = [
+  { x:160, y:490, w:230, h:18 },
+  { x:890, y:490, w:230, h:18 },
+  { x:530, y:350, w:220, h:18 }
+];
+const solids = [
+  { x:0, y:FLOOR_Y, w:VW, h:VH-FLOOR_Y, blocksX: false, blocksY: true },
+  { x:0, y:0, w:WALL, h:VH, blocksX: true, blocksY: false },
+  { x:VW-WALL, y:0, w:WALL, h:VH, blocksX: true, blocksY: false },
+  { x:160, y:490, w:230, h:18, blocksX: false, blocksY: true },
+  { x:890, y:490, w:230, h:18, blocksX: false, blocksY: true },
+  { x:530, y:350, w:220, h:18, blocksX: false, blocksY: true }
+];
+const SPAWNS = [
+  { x:70, y:null }, { x:VW-100, y:null },
+  { x:220, y:null }, { x:VW-250, y:null },
+  { x:300, y:90 }, { x:640, y:90 }, { x:960, y:90 }
+];
+const TYPES = {
+  grunt:   { hp: 50,  w: 24, h: 56, speed: 100, dmg: 7,  score: 25, color:'#ff3b3b' },
+  brute:   { hp: 160, w: 36, h: 78, speed: 65,  dmg: 16, score: 70, color:'#d81f1f' },
+  thrower: { hp: 42,  w: 24, h: 56, speed: 85,  dmg: 0,  score: 45, color:'#ff7a5c' }
+};
+
+/* ================================ PLAYER ================================ */
+function makePlayer(x, color, tag){
+  return {
+    tag, color, x, y: FLOOR_Y - 60, w: 26, h: 60,
+    vx:0, vy:0, kb:0, onGround:false, facing:1, anim:0,
+    coyote:0, hp:100, maxHp:100, invuln:0, dead: false,
+    attackCd:0, attackT:0, attackCdMax:0.36, attackRange:54, damage:34, lifesteal:0,
+    shootCd:0, shootT:0, shootCdMax:2.5, shootDamage:24, shootSpeed:720,
+    multishot:0, pierce:0,
+    dashCd:0, dashT:0, dashDir:1, dashCdMax:0.9, dashSpeed:900, dashDur:0.17, dashDamage:0,
+    regenT:0, regenDelay:4.0, regenRate:6,
+    moveSpeed:290, jumpPower:830, armor: 0, xpMult: 1,
+    fitness: 0, damageThisWave: 0,
+    intent: { left:false, right:false, jump:false, dash:false, attack:false, shoot:false },
+    shopLevels: {}, shopOffers: [],
+  };
+}
+
+/* ================================ PHYSICS ================================ */
+function moveEntity(e, dx, dy){
+  if (dx !== 0){
+    const hSteps = Math.max(1, Math.ceil(Math.abs(dx) / SUBSTEP_PX));
+    const hStep = dx / hSteps;
+    for (let i = 0; i < hSteps; i++){
+      e.x += hStep;
+      let clamped = false;
+      for (const s of solids){
+        if (!s.blocksX) continue;
+        if (aabb(e, s)){
+          if (hStep > 0) e.x = s.x - e.w;
+          else e.x = s.x + s.w;
+          e.vx = 0;
+          clamped = true;
+          break;
+        }
+      }
+      if (clamped) break;
+    }
+  }
+  e.onGround = false;
+  if (dy !== 0){
+    const vSteps = Math.max(1, Math.ceil(Math.abs(dy) / SUBSTEP_PX));
+    const vStep = dy / vSteps;
+    for (let i = 0; i < vSteps; i++){
+      e.y += vStep;
+      let clamped = false;
+      for (const s of solids){
+        if (!s.blocksY) continue;
+        if (aabb(e, s)){
+          if (vStep > 0){ e.y = s.y - e.h; e.vy = 0; e.onGround = true; }
+          else if (vStep < 0){ e.y = s.y + s.h; e.vy = 0; }
+          clamped = true;
+          break;
+        }
+      }
+      if (clamped) break;
+    }
+  }
+}
+
+function fixInsideWall(e){
+  for (const s of solids){
+    if (!s.blocksX) continue;
+    if (aabb(e, s)){
+      if (s.x < VW / 2) e.x = s.x + s.w;
+      else e.x = s.x - e.w;
+      e.vx = 0;
+    }
+  }
+}
+
+function updatePlayerPhysics(p, dt){
+  if (p.dead) return;
+  if (p.attackCd > 0) p.attackCd -= dt;
+  if (p.attackT  > 0) p.attackT  -= dt;
+  if (p.invuln   > 0) p.invuln   -= dt;
+  if (p.dashCd   > 0) p.dashCd   -= dt;
+  if (p.shootCd  > 0) p.shootCd  -= dt;
+  if (p.shootT   > 0) p.shootT   -= dt;
+
+  p.regenT += dt;
+  if (p.regenT > p.regenDelay && p.hp < p.maxHp){
+    p.hp = Math.min(p.maxHp, p.hp + p.regenRate * dt);
+  }
+
+  if (p.dashT > 0){
+    p.dashT -= dt;
+    p.vx = p.dashDir * p.dashSpeed;
+    const totalDX = p.vx * dt;
+    const dSteps = Math.max(1, Math.ceil(Math.abs(totalDX) / SUBSTEP_PX));
+    const dStep = totalDX / dSteps;
+    for (let i = 0; i < dSteps; i++){
+      p.x += dStep;
+      let hit = false;
+      for (const s of solids){
+        if (!s.blocksX) continue;
+        if (aabb(p, s)){
+          if (dStep > 0) p.x = s.x - p.w;
+          else p.x = s.x + p.w;
+          p.dashT = 0;
+          hit = true;
+          break;
+        }
+      }
+      if (hit) break;
+    }
+    if (p.dashDamage > 0){
+      for (const e of game.enemies){
+        if (!e.alive || e._dashHit) continue;
+        if (aabb(p, e)){ e._dashHit = true; damageEnemy(e, p.dashDamage, p.dashDir, p); }
+      }
+    }
+    p.anim += dt * 16;
+    game.dashTrail.push({ x: p.x, y: p.y, facing: p.facing, life: TRAIL_LIFE, color: p.color });
+    return;
+  }
+
+  let moveX = 0;
+  if (p.intent.left && !p.intent.right) moveX = -1;
+  else if (p.intent.right && !p.intent.left) moveX = 1;
+
+  const atLeftWall  = p.x <= WALL + 4;
+  const atRightWall = p.x + p.w >= VW - WALL - 4;
+  if (moveX < 0 && atLeftWall)  moveX = 0;
+  if (moveX > 0 && atRightWall) moveX = 0;
+
+  const accel = p.onGround ? 3200 : 1900;
+  if (moveX < 0){ p.vx -= accel*dt; p.facing = -1; }
+  else if (moveX > 0){ p.vx += accel*dt; p.facing = 1; }
+  else {
+    const fr = (p.onGround ? 3400 : 900) * dt;
+    if (Math.abs(p.vx) <= fr) p.vx = 0;
+    else p.vx -= Math.sign(p.vx) * fr;
+  }
+  p.vx = clamp(p.vx, -p.moveSpeed, p.moveSpeed);
+
+  if (p.onGround) p.coyote = 0.1; else p.coyote -= dt;
+
+  if (p.intent.jump && p.coyote > 0){
+    p.vy = -p.jumpPower;
+    p.onGround = false;
+    p.coyote = 0;
+  }
+
+  p.vy = Math.min(p.vy + GRAV*dt, 1500);
+
+  const kfr = 2400 * dt;
+  if (Math.abs(p.kb) <= kfr) p.kb = 0;
+  else p.kb -= Math.sign(p.kb) * kfr;
+
+  moveEntity(p, (p.vx + p.kb) * dt, p.vy * dt);
+
+  p.anim += Math.abs(p.vx) * dt * 0.055;
+  if (p.onGround && Math.abs(p.vx) < 25){
+    const tgt = Math.round(p.anim / Math.PI) * Math.PI;
+    p.anim = lerp(p.anim, tgt, 1 - Math.pow(0.0008, dt));
+  }
+}
+
+/* ================================ ACTIONS ================================ */
+function tryDash(p){
+  if (p.dead || p.dashCd > 0 || p.dashT > 0) return;
+  p.dashCd = p.dashCdMax;
+  p.dashT = p.dashDur;
+  p.dashDir = p.intent.left ? -1 : p.intent.right ? 1 : p.facing;
+  p.facing = p.dashDir;
+  p.vy = 0;
+  p.invuln = Math.max(p.invuln, p.dashDur + 0.06);
+  for (const e of game.enemies) e._dashHit = false;
+  burst(p.x + p.w/2, p.y + p.h*0.5, 9, p.color, 0.75);
+}
+function tryAttack(p){
+  if (p.dead || p.attackCd > 0 || p.attackT > 0) return;
+  p.attackCd = p.attackCdMax;
+  p.attackT = 0.24;
+  doPlayerHit(p);
+}
+function doPlayerHit(p){
+  const R = p.attackRange;
+  const hb = { x: p.facing > 0 ? p.x + p.w - 8 : p.x + 8 - R, y: p.y + 4, w: R, h: p.h - 8 };
+  let hit = false;
+  for (const e of game.enemies){
+    if (!e.alive) continue;
+    if (aabb(hb, e)){
+      hit = true;
+      damageEnemy(e, p.damage, p.facing, p);
+      if (p.lifesteal > 0 && !p.dead) p.hp = Math.min(p.maxHp, p.hp + p.lifesteal);
+    }
+  }
+  if (hit){ game.shake = Math.max(game.shake, 6); burst(hb.x + hb.w/2, hb.y + hb.h/2, 8, '#9ccdff', 0.7); }
+}
+function tryShoot(p){
+  if (p.dead || p.shootCd > 0) return;
+  let target = null, bestD = Infinity;
+  const px = p.x + p.w/2;
+  for (const e of game.enemies){
+    if (!e.alive) continue;
+    const dx = (e.x + e.w/2) - px;
+    if (p.facing > 0 && dx < -60) continue;
+    if (p.facing < 0 && dx >  60) continue;
+    const dy = (e.y + e.h/2) - (p.y + p.h/2);
+    const d = dx*dx + dy*dy;
+    if (d < bestD){ bestD = d; target = e; }
+  }
+  const handX = p.x + p.w/2 + p.facing * 12;
+  const handY = p.y + p.h * 0.42;
+  const baseAng = target
+    ? Math.atan2((target.y + target.h/2) - handY, (target.x + target.w/2) - handX)
+    : (p.facing > 0 ? 0 : Math.PI);
+  const shots = 1 + p.multishot;
+  for (let i = 0; i < shots; i++){
+    const ang = baseAng + (i - (shots-1)/2) * 0.18;
+    game.projectiles.push({
+      x: handX, y: handY, vx: Math.cos(ang)*p.shootSpeed, vy: Math.sin(ang)*p.shootSpeed,
+      r: 5, life: 2, friendly: true, damage: p.shootDamage, pierce: p.pierce,
+      source: p
+    });
+  }
+  p.shootCd = p.shootCdMax;
+  p.shootT = 0.18;
+  burst(handX, handY, 5, '#b79cff', 0.5);
+  game.shake = Math.max(game.shake, 2);
+}
+
+/* ================================ DAMAGE ================================ */
+function damageEnemy(e, dmg, dir, source){
+  if (!e.alive) return;
+  e.hp -= dmg;
+  e.hitFlash = 0.14;
+  e.kb = dir * 320;
+  if (e.onGround) e.vy = -180;
+  burst(e.x + e.w/2, e.y + e.h/2, 8, '#ff5b5b', 0.7);
+
+  if (source){
+    source.fitness += dmg * 0.15;
+    source.damageThisWave += dmg;
+  }
+
+  if (e.hp <= 0){
+    e.alive = false;
+    game.score += e.score;
+    game.shake = Math.max(game.shake, 9);
+    burst(e.x + e.w/2, e.y + e.h/2, 20, e.color, 1.1);
+    spawnDrops(e.x + e.w/2, e.y + e.h/2, e);
+    if (source){
+      const kb = e.type === 'brute' ? 8 : e.type === 'thrower' ? 5 : 4;
+      source.fitness += kb;
+    }
+  }
+}
+function damagePlayer(p, amount, dir){
+  if (p.dead || p.invuln > 0) return;
+  const reduced = amount * (1 - Math.min(0.75, p.armor));
+  p.hp -= reduced;
+  p.invuln = 0.9;
+  p.kb = (dir || 1) * 340;
+  p.vy = -280;
+  p.regenT = 0;
+  game.shake = 14;
+  game.hurtFlash = 0.45;
+  burst(p.x + p.w/2, p.y + p.h/2, 16, p.color, 1.1);
+  if (p.hp <= 0){
+    p.hp = 0; p.dead = true;
+    p.fitness -= 10;
+    burst(p.x + p.w/2, p.y + p.h/2, 30, p.color, 1.6);
+    game.shake = 20;
+  }
+}
+
+/* ================================ ENEMIES ================================ */
+function createEnemy(sp){
+  const T = TYPES[sp.type];
+  const hpScale  = Math.min(1 + (game.wave.num - 1) * 0.07, 3.0);
+  const spdScale = Math.min(1 + (game.wave.num - 1) * 0.02, 2.0);
+  const y = (sp.y === null || sp.y === undefined) ? FLOOR_Y - T.h : sp.y;
+  game.enemies.push({
+    type: sp.type, x: sp.x, y: y, w: T.w, h: T.h,
+    vx:0, vy:0, kb:0, onGround:false,
+    hp: T.hp * hpScale, maxHp: T.hp * hpScale,
+    speed: T.speed * spdScale,
+    dmg: T.dmg, score: T.score, color: T.color,
+    facing: -1, anim: 0, hitFlash: 0, contactCd: 0, jumpCd: 0,
+    st: 'chase', t: 0, alive: true, _dashHit: false
+  });
+  burst(sp.x + T.w/2, y + T.h/2, 10, T.color, 0.85);
+}
+function nearestAlivePlayer(e){
+  let best = null, bestD = Infinity;
+  for (const p of game.players){
+    if (p.dead) continue;
+    const d = dist2(p.x + p.w/2, p.y + p.h/2, e.x + e.w/2, e.y + e.h/2);
+    if (d < bestD){ bestD = d; best = p; }
+  }
+  return best;
+}
+function updateEnemies(dt){
+  for (const e of game.enemies){
+    if (!e.alive) continue;
+    e.hitFlash  = Math.max(0, e.hitFlash  - dt);
+    e.contactCd = Math.max(0, e.contactCd - dt);
+    e.jumpCd    = Math.max(0, e.jumpCd    - dt);
+    e.anim     += dt * (3 + Math.abs(e.vx) * 0.05);
+    e.vy += GRAV * dt;
+    const kfr = 1700 * dt;
+    if (Math.abs(e.kb) <= kfr) e.kb = 0; else e.kb -= Math.sign(e.kb) * kfr;
+    const target = nearestAlivePlayer(e);
+    if (!target){ e.vx = 0; moveEntity(e, e.kb * dt, e.vy * dt); continue; }
+    if (e.type === 'grunt')      aiGrunt(e, dt, target);
+    else if (e.type === 'brute') aiBrute(e, dt, target);
+    else                         aiThrower(e, dt, target);
+    if (!e.alive) continue;
+    moveEntity(e, (e.vx + e.kb) * dt, e.vy * dt);
+  }
+  let writeIdx = 0;
+  for (let i = 0; i < game.enemies.length; i++){
+    if (game.enemies[i].alive) game.enemies[writeIdx++] = game.enemies[i];
+  }
+  game.enemies.length = writeIdx;
+}
+function aiGrunt(e, dt, p){
+  const pcx = p.x + p.w/2, ecx = e.x + e.w/2;
+  const dx = pcx - ecx, dist = Math.abs(dx);
+  const dir = Math.sign(dx) || 1;
+  e.facing = dir;
+  let sideStep = 0, nearCount = 0, nearDx = 0;
+  for (const o of game.enemies){
+    if (o === e || !o.alive || o.type !== 'grunt') continue;
+    if (Math.abs((o.y + o.h) - (e.y + e.h)) > 40) continue;
+    const odx = (o.x + o.w/2) - ecx;
+    if (Math.abs(odx) < 80){ nearCount++; nearDx += odx; }
+  }
+  if (nearCount >= 2 && Math.abs(nearDx) < 60) sideStep = (nearDx >= 0 ? -1 : 1) * 0.3;
+  e.vx = (dir + sideStep) * e.speed;
+  if (e.onGround && e.jumpCd <= 0){
+    if (p.y + p.h < e.y - 40 && dist < 140){ e.vy = -830; e.jumpCd = 0.7; }
+    else if (Math.abs(e.vx) < 20 && dist > 80 && Math.random() < 0.15){ e.vy = -780; e.jumpCd = 1.2; }
+  }
+  if (e.contactCd <= 0 && aabb(p, e)){ damagePlayer(p, e.dmg, dir); e.contactCd = 0.9; }
+}
+function aiBrute(e, dt, p){
+  const pcx = p.x + p.w/2, ecx = e.x + e.w/2;
+  const dx = pcx - ecx, dist = Math.abs(dx);
+  const dir = Math.sign(dx) || 1;
+  e.t -= dt;
+  if (e.st === 'chase'){
+    e.facing = dir;
+    let otherAttacking = false;
+    for (const o of game.enemies){
+      if (o === e || !o.alive || o.type !== 'brute') continue;
+      if ((o.st === 'windup' || o.st === 'strike') && Math.abs((o.x + o.w/2) - ecx) < 240){ otherAttacking = true; break; }
+    }
+    e.vx = dir * e.speed * (otherAttacking ? 0.6 : 1.1);
+    if (e.onGround && e.jumpCd <= 0 && p.y + p.h < e.y - 50 && dist < 240){ e.vy = -780; e.jumpCd = 1.3; }
+    if (dist < 115 && Math.abs(p.y - e.y) < 95 && e.t <= 0 && !otherAttacking){ e.st = 'windup'; e.t = 0.5; e.vx = 0; }
+  }
+  else if (e.st === 'windup'){
+    e.vx = 0; e.facing = dir;
+    if (e.t <= 0){
+      e.st = 'strike'; e.t = 0.16;
+      const hb = { x: e.facing > 0 ? e.x + e.w : e.x - 52, y: e.y + 8, w: 52, h: e.h - 8 };
+      burst(hb.x + hb.w/2, hb.y + hb.h/2, 14, '#ff3030', 1);
+      game.shake = Math.max(game.shake, 10);
+      if (aabb(hb, p)) damagePlayer(p, e.dmg, e.facing);
+    }
+  }
+  else if (e.st === 'strike'){ e.vx = 0; if (e.t <= 0){ e.st = 'recover'; e.t = 0.6; } }
+  else { e.vx = 0; if (e.t <= 0){ e.st = 'chase'; e.t = 0.2; } }
+}
+function aiThrower(e, dt, p){
+  const pcx = p.x + p.w/2, ecx = e.x + e.w/2;
+  const dx = pcx - ecx, dist = Math.abs(dx);
+  const dir = Math.sign(dx) || 1;
+  e.facing = dir;
+  const sameLevel = Math.abs((p.y + p.h) - (e.y + e.h)) < 50;
+  if (sameLevel && dist < 200) e.vx = -dir * e.speed * 1.2;
+  else if (dist < 240) e.vx = -dir * e.speed * 0.7;
+  else if (dist > 400) e.vx = dir * e.speed * 0.8;
+  else e.vx = 0;
+  if (e.onGround && e.jumpCd <= 0){
+    if (p.y + p.h < e.y - 55 && dist < 320){ e.vy = -720; e.jumpCd = 1.4; }
+    else if (sameLevel && dist < 200 && Math.random() < 0.04){ e.vy = -750; e.jumpCd = 1.6; }
+  }
+  e.t -= dt;
+  if (e.t <= 0 && dist < 600 && dist > 120){
+    e.t = 1.9 + Math.random() * 0.5;
+    const flight = Math.min(1.0, dist / 430);
+    const px = pcx + p.vx * flight * 0.6;
+    const py = p.y + p.h/2 + p.vy * flight * 0.4;
+    const ex = e.x + e.w/2, ey = e.y + e.h*0.35;
+    const ang = Math.atan2(py - ey, px - ex);
+    const sp = 430;
+    game.projectiles.push({ x: ex, y: ey, vx: Math.cos(ang)*sp, vy: Math.sin(ang)*sp, r: 6, life: 3, friendly: false });
+    burst(ex, ey, 5, '#ff8a6a', 0.5);
+  }
+}
+
+/* ================================ PROJECTILES ================================ */
+function updateProjectiles(dt){
+  for (let i = game.projectiles.length - 1; i >= 0; i--){
+    const b = game.projectiles[i];
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    let dead = b.life <= 0;
+    if (!dead && (b.x < 0 || b.x > VW || b.y < 0 || b.y > VH)) dead = true;
+    if (!dead){
+      for (const s of solids){
+        if (b.x > s.x && b.x < s.x + s.w && b.y > s.y && b.y < s.y + s.h){ dead = true; break; }
+      }
+    }
+    if (!dead && b.friendly){
+      for (const e of game.enemies){
+        if (!e.alive) continue;
+        if (b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h){
+          damageEnemy(e, b.damage, Math.sign(b.vx) || 1, b.source);
+          if (b.pierce > 0){ b.pierce--; } else { dead = true; }
+          break;
+        }
+      }
+    }
+    if (!dead && !b.friendly){
+      const br = { x: b.x - b.r, y: b.y - b.r, w: b.r*2, h: b.r*2 };
+      for (const p of game.players){
+        if (p.dead) continue;
+        if (aabb(br, p)){ damagePlayer(p, 8, Math.sign(b.vx) || 1); dead = true; break; }
+      }
+    }
+    if (dead){
+      burst(b.x, b.y, 5, b.friendly ? '#b79cff' : '#ff8a6a', 0.55);
+      game.projectiles.splice(i, 1);
+    }
+  }
+}
+
+/* ================================ DROPS ================================ */
+function spawnDrops(x, y, enemy){
+  const coinCount = enemy.type === 'brute' ? 5 : enemy.type === 'thrower' ? 3 : 2;
+  for (let i = 0; i < coinCount; i++){
+    game.pickups.push({ type:'coin', x: x + (Math.random()-0.5)*16, y: y + (Math.random()-0.5)*10, vx: (Math.random()-0.5)*260, vy: -160 - Math.random()*130, r: 6, value: 1, life: 0, bob: Math.random()*6.283, magnet: false });
+  }
+  const xpMult = 1 + game.wave.num * 0.04;
+  const xpVal = (enemy.type === 'brute' ? 24 : enemy.type === 'thrower' ? 12 : 7) * xpMult;
+  const orbCount = enemy.type === 'brute' ? 3 : 1;
+  for (let i = 0; i < orbCount; i++){
+    game.pickups.push({ type:'xp', x: x + (Math.random()-0.5)*16, y: y + (Math.random()-0.5)*10, vx: (Math.random()-0.5)*200, vy: -170 - Math.random()*110, r: 7, value: Math.max(1, Math.round(xpVal/orbCount)), life: 0, bob: Math.random()*6.283, magnet: false });
+  }
+}
+function updatePickups(dt){
+  const alive = [];
+  for (const p of game.players) if (!p.dead) alive.push(p);
+  if (alive.length === 0) return;
+  const magnetRange = game.wave.phase === 'clear' ? 2000 : 170;
+
+  for (let i = game.pickups.length - 1; i >= 0; i--){
+    const k = game.pickups[i];
+    k.life += dt;
+    let near = null, nearD2 = Infinity;
+    for (const p of alive){
+      const d2 = dist2(p.x + p.w/2, p.y + p.h/2, k.x, k.y);
+      if (d2 < nearD2){ nearD2 = d2; near = p; }
+    }
+    if (!near) continue;
+    if (!k.magnet && k.life > 0.3 && nearD2 < magnetRange*magnetRange) k.magnet = true;
+    const cx = near.x + near.w/2, cy = near.y + near.h/2;
+    const dx = cx - k.x, dy = cy - k.y;
+    const d2 = dx*dx + dy*dy;
+    if (d2 < 27*27){
+      if (k.type === 'coin') game.coins += k.value;
+      else gainXp(k.value * near.xpMult, near);
+      burst(k.x, k.y, 4, k.type === 'coin' ? '#e8c15a' : '#7fe0a0', 0.45);
+      game.pickups.splice(i, 1);
+      continue;
+    }
+    if (k.magnet){
+      const dist = Math.sqrt(d2);
+      if (dist > 0.5){ k.x += dx / dist * 840 * dt; k.y += dy / dist * 840 * dt; }
+    } else {
+      k.vy += 1400 * dt;
+      k.x += k.vx * dt; k.y += k.vy * dt;
+      const floorY = FLOOR_Y - k.r;
+      if (k.y > floorY){ k.y = floorY; k.vy *= -0.38; k.vx *= 0.72; if (Math.abs(k.vy) < 60) k.vy = 0; }
+      if (k.x < WALL + k.r){ k.x = WALL + k.r; k.vx = Math.abs(k.vx) * 0.6; }
+      else if (k.x > VW - WALL - k.r){ k.x = VW - WALL - k.r; k.vx = -Math.abs(k.vx) * 0.6; }
+    }
+  }
+}
+function gainXp(v, player){
+  if (player) player.fitness += v * 0.05;
+  game.xp += v;
+  while (game.xp >= game.xpNext){
+    game.xp -= game.xpNext;
+    game.level++;
+    game.xpNext = Math.round(game.xpNext * 1.2 + 5);
+    for (const p of game.players){
+      p.maxHp += 10;
+      p.hp = p.maxHp;
+      p.damage += 2;
+      p.shootDamage += 1.5;
+    }
+    burst(game.players[0].x, game.players[0].y, 24, '#7fe0a0', 1.2);
+    game.shake = Math.max(game.shake, 8);
+  }
+}
+
+/* ================================ WAVES ================================ */
+function spawnWave(n){
+  const grunts   = Math.min(1 + n, 8);
+  const brutes   = n >= 2 ? Math.min(Math.floor((n - 1) * 0.5), 3) : 0;
+  const throwers = n >= 3 ? Math.min(Math.floor(n / 4) + 1, 2) : 0;
+  const list = [];
+  for (let i = 0; i < grunts;   i++) list.push('grunt');
+  for (let i = 0; i < brutes;   i++) list.push('brute');
+  for (let i = 0; i < throwers; i++) list.push('thrower');
+  for (let i = list.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+  }
+  game.pending = list.map((type, i) => {
+    const sp = SPAWNS[Math.floor(Math.random() * SPAWNS.length)];
+    return { type, x: sp.x, y: sp.y, t: 0.15 + i * 0.25 };
+  });
+}
+function updateWaves(dt){
+  const w = game.wave;
+
+  if (w.phase === 'intermission'){
+    w.t -= dt;
+    if (w.t <= 0){
+      w.num++;
+      spawnWave(w.num);
+      w.phase = 'fight';
+      w.spawnCooldown = 0;
+      w.timer = 0;
+      game.waveRewardGiven = false;
+      for (const p of game.players) p.damageThisWave = 0;
+    }
+    return;
+  }
+
+  if (w.phase === 'clear'){
+    if (!game.waveRewardGiven){
+      game.waveRewardGiven = true;
+      const waveTime = Math.max(0, w.timer);
+      const speedBonus = Math.max(0, 40 - waveTime * 1.0);
+      const totalBonus = 80 + w.num * 20 + speedBonus;
+
+      let totalDamage = 0;
+      for (const p of game.players) totalDamage += p.damageThisWave;
+      if (totalDamage > 0){
+        for (const p of game.players){
+          if (p.dead) continue;
+          const share = p.damageThisWave / totalDamage;
+          p.fitness += totalBonus * share;
+        }
+      } else {
+        const aliveCount = game.players.filter(p => !p.dead).length;
+        for (const p of game.players){
+          if (p.dead) continue;
+          p.fitness += totalBonus / Math.max(1, aliveCount);
+        }
+      }
+    }
+    w.t -= dt;
+    if (w.t <= 0){
+      for (const k of game.pickups){
+        if (k.type === 'coin') game.coins += k.value;
+        else {
+          const alive = game.players.filter(p => !p.dead);
+          for (const p of alive) gainXp(k.value / Math.max(1, alive.length), p);
+        }
+      }
+      game.pickups = [];
+      for (const p of game.players) if (!p.dead) p.shopOffers = rollOffersForPlayer(p);
+      autoBuyAll();
+      w.phase = 'intermission';
+      w.t = 1.5; w.dur = 1.5;
+    }
+    return;
+  }
+
+  w.timer += dt;
+  if (w.timer > WAVE_TIME_LIMIT){
+    game.enemies = [];
+    game.pending = [];
+    game.projectiles = [];
+    game.waveRewardGiven = true;
+    w.phase = 'clear';
+    w.t = 1.2;
+    return;
+  }
+
+  for (const p of game.pending) p.t -= dt;
+  if (w.spawnCooldown > 0) w.spawnCooldown -= dt;
+  if (game.enemies.length < MAX_ACTIVE_ENEMIES && w.spawnCooldown <= 0){
+    for (let i = 0; i < game.pending.length; i++){
+      if (game.pending[i].t <= 0){
+        createEnemy(game.pending[i]);
+        game.pending.splice(i, 1);
+        w.spawnCooldown = SPAWN_INTERVAL;
+        break;
+      }
+    }
+  }
+
+  if (game.enemies.length === 0 && game.pending.length === 0){
+    game.projectiles = [];
+    game.coins += 10;
+    for (const p of game.players) if (!p.dead) p.hp = p.maxHp;
+    game.score += 120 * w.num;
+    game.wavesCleared++;
+    w.phase = 'clear';
+    w.t = 1.2;
+  }
+}
+
+/* ================================ UPGRADES ================================ */
+const UPGRADE_POOL = [
+  { id:'hp',        name:'Здоровье',            base:8,  step:6, max:99, apply(p){ p.maxHp += 20; p.hp = Math.min(p.maxHp, p.hp + 20); } },
+  { id:'regenRate', name:'Регенерация',         base:10, step:8, max:5,  apply(p){ p.regenRate += 2; } },
+  { id:'regenFast', name:'Откат регена',        base:9,  step:7, max:3,  apply(p){ p.regenDelay = Math.max(1.5, p.regenDelay - 0.6); } },
+  { id:'dashCd',    name:'Перезарядка рывка',   base:10, step:8, max:4,  apply(p){ p.dashCdMax = Math.max(0.35, p.dashCdMax - 0.12); } },
+  { id:'dashSpeed', name:'Скорость рывка',      base:8,  step:6, max:4,  apply(p){ p.dashSpeed += 80; } },
+  { id:'dashDur',   name:'Длина рывка',         base:9,  step:7, max:3,  apply(p){ p.dashDur += 0.03; } },
+  { id:'melee',     name:'Урон удара',          base:9,  step:7, max:99, apply(p){ p.damage += 6; } },
+  { id:'shootDmg',  name:'Урон выстрела',       base:9,  step:7, max:99, apply(p){ p.shootDamage += 4; } },
+  { id:'shootCd',   name:'Скорострельность',    base:10, step:8, max:6,  apply(p){ p.shootCdMax = Math.max(1.0, p.shootCdMax - 0.25); } },
+  { id:'shootSpd',  name:'Скорость снаряда',    base:7,  step:5, max:5,  apply(p){ p.shootSpeed += 60; } },
+  { id:'move',      name:'Скорость бега',       base:8,  step:6, max:5,  apply(p){ p.moveSpeed += 20; } },
+  { id:'jump',      name:'Прыжок',              base:7,  step:5, max:4,  apply(p){ p.jumpPower += 50; } },
+  { id:'atkSpd',    name:'Скорость удара',      base:9,  step:7, max:4,  apply(p){ p.attackCdMax = Math.max(0.24, p.attackCdMax - 0.03); } },
+  { id:'atkRange',  name:'Дальность удара',     base:8,  step:6, max:3,  apply(p){ p.attackRange += 8; } },
+  { id:'lifesteal', name:'Вампиризм',           base:12, step:10, max:5, apply(p){ p.lifesteal += 2; } },
+  { id:'armor',     name:'Броня',               base:11, step:9, max:5,  apply(p){ p.armor = Math.min(0.75, p.armor + 0.05); } },
+  { id:'multishot', name:'Мультивыстрел',       base:15, step:12, max:2, apply(p){ p.multishot += 1; } },
+  { id:'pierce',    name:'Пробивание',          base:12, step:10, max:2, apply(p){ p.pierce += 1; } },
+  { id:'xpGain',    name:'Опыт',                base:8,  step:6, max:5,  apply(p){ p.xpMult += 0.2; } },
+  { id:'dashDmg',   name:'Урон рывком',         base:13, step:10, max:3, apply(p){ p.dashDamage += 15; } }
+];
+function rollOffersForPlayer(p){
+  const available = UPGRADE_POOL.filter(u => (p.shopLevels[u.id] || 0) < u.max);
+  for (let i = available.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = available[i]; available[i] = available[j]; available[j] = tmp;
+  }
+  return available.slice(0, 3).map(u => {
+    const lvl = p.shopLevels[u.id] || 0;
+    return { upg: u, level: lvl, cost: u.base + lvl * u.step, purchased: false };
+  });
+}
+function autoBuyAll(){
+  let coins = game.coins;
+  for (let round = 0; round < 30; round++){
+    let bought = false;
+    for (const p of game.players){
+      if (p.dead) continue;
+      let cheapest = null;
+      for (const o of p.shopOffers){
+        if (o.purchased) continue;
+        if (!cheapest || o.cost < cheapest.cost) cheapest = o;
+      }
+      if (cheapest && coins >= cheapest.cost){
+        coins -= cheapest.cost;
+        cheapest.upg.apply(p);
+        p.shopLevels[cheapest.upg.id] = (p.shopLevels[cheapest.upg.id] || 0) + 1;
+        cheapest.purchased = true;
+        bought = true;
+      }
+    }
+    if (!bought) break;
+  }
+  game.coins = coins;
+}
+
+/* ================================ PARTICLES ================================ */
+function burst(x, y, n, color, power){
+  if (game.particles.length > MAX_PARTICLES) return;
+  power = power || 0.8;
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2;
+    const s = (60 + Math.random()*240) * power;
+    game.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s - 80, life: 0.3 + Math.random()*0.5, size: 2 + Math.random()*3, color });
+  }
+}
+function updateParticles(dt){
+  for (let i = game.particles.length - 1; i >= 0; i--){
+    const q = game.particles[i];
+    q.life -= dt;
+    if (q.life <= 0){ game.particles.splice(i, 1); continue; }
+    q.vy += 1100 * dt;
+    q.x += q.vx * dt; q.y += q.vy * dt;
+    q.vx *= 0.985;
+  }
+}
+
+/* ================================ GAME STATE ================================ */
+const game = {
+  state: 'menu',
+  players: [], enemies: [], projectiles: [], pending: [],
+  pickups: [], particles: [], dashTrail: [],
+  wave: { num:0, phase:'intermission', t:1.5, dur:1.5, spawnCooldown:0, timer:0 },
+  wavesCleared: 0, score: 0, time: 0, coins: 0,
+  level: 1, xp: 0, xpNext: 30,
+  shake: 0, hurtFlash: 0, deathTimer: 0,
+  waveRewardGiven: false,
+};
+
+function resetGameState(){
+  game.players = [
+    makePlayer(300, '#4aa3ff', 'P1'),
+    makePlayer(980, '#4affa0', 'P2')
+  ];
+  game.enemies = [];
+  game.projectiles = [];
+  game.pending = [];
+  game.pickups = [];
+  game.particles = [];
+  game.dashTrail = [];
+  game.wave = { num: 0, phase: 'intermission', t: 0.5, dur: 0.5, spawnCooldown: 0, timer: 0 };
+  game.wavesCleared = 0;
+  game.score = 0; game.time = 0; game.coins = 0;
+  game.level = 1; game.xp = 0; game.xpNext = 30;
+  game.shake = 0; game.hurtFlash = 0;
+  game.deathTimer = 0;
+  game.waveRewardGiven = false;
+}
+
+/* ================================ INPUT ================================ */
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+function getLocalInput(){
+  return {
+    left:  !!(keys['KeyA']||keys['ArrowLeft']),
+    right: !!(keys['KeyD']||keys['ArrowRight']),
+    jump:  !!(keys['KeyW']||keys['Space']||keys['ArrowUp']),
+    dash:  !!(keys['ShiftLeft']||keys['ShiftRight']),
+    attack: !!(keys['KeyJ']||keys['KeyZ']),
+    shoot: !!(keys['KeyK']||keys['KeyX'])
+  };
+}
+
+/* ================================ NETWORK (PeerJS) ================================ */
+const PEER_CONFIG = {
+  debug: 0,
+  config: {
+    iceServers: [
+      // STUN (прямое соединение)
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      // TURN (обходит строгий NAT / мобильные сети)
+      {
+        urls: 'turn:global.relay.metered.ca:80',
+        username: 'e8dd65a92de0150a70de7f2b',
+        credential: 'e8dd65a92de0150a70de7f2b'
+      },
+      {
+        urls: 'turn:global.relay.metered.ca:443',
+        username: 'e8dd65a92de0150a70de7f2b',
+        credential: 'e8dd65a92de0150a70de7f2b'
+      },
+      {
+        urls: 'turn:global.relay.metered.ca:443?transport=tcp',
+        username: 'e8dd65a92de0150a70de7f2b',
+        credential: 'e8dd65a92de0150a70de7f2b'
+      }
+    ],
+    iceCandidatePoolSize: 10,
+    sdpSemantics: 'unified-plan',
+    bundlePolicy: 'max-bundle'
+  }
+};
+
+// Основной сигнальный брокер (НЕ 0.peerjs.com)
+const SIGNAL_SERVER = {
+  host: 'signal.pooled.run',
+  port: 443,
+  path: '/',
+  secure: true
+};
+// Резервный (облачный PeerJS)
+const FALLBACK_SIGNAL_SERVER = {
+  host: '0.peerjs.com',
+  port: 443,
+  path: '/',
+  secure: true
+};
+
+let peer = null, conn = null, isHost = false, connected = false;
+let myName = "Игрок";
+let remoteIntent = { left:false, right:false, jump:false, dash:false, attack:false, shoot:false };
+let netTimer = 0;
+let peerBusy = false;
+let connectTimeout = null;
+let setupPhase = 'idle';
+let currentRoomCode = null;
+const MAX_RETRIES = 3;
+
+function destroyPeer(){
+  if (peer){ try { peer.destroy(); } catch(e){} peer = null; }
+  conn = null;
+  connected = false;
+  clearTimeout(connectTimeout);
+  connectTimeout = null;
+}
+
+function genCode(){
+  const c='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s='';
+  for(let i=0;i<6;i++) s += c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+function send(o){ if(conn && conn.open){ try { conn.send(o); } catch(e){} } }
+
+function setMenuStatus(txt, kind){
+  const el = $('menuStatus');
+  el.textContent = txt;
+  el.className = kind === true ? 'err' : (kind === 'warn' ? 'warn' : '');
+}
+
+function getErrorText(type){
+  switch(type){
+    case 'network':            return 'Нет связи с сигнальным сервером. Проверь интернет и попробуй ещё раз.';
+    case 'server-error':       return 'Сигнальный сервер перегружен. Подожди минуту и попробуй снова.';
+    case 'socket-error':       return 'Сетевая ошибка. Проверь интернет / firewall.';
+    case 'socket-closed':      return 'Соединение с сервером закрыто. Попробуй ещё раз.';
+    case 'unavailable-id':     return 'Код комнаты занят. Попробуй ещё раз.';
+    case 'peer-unavailable':   return 'Комната не найдена. Проверь код.';
+    case 'browser-incompatible': return 'Браузер не поддерживает WebRTC.';
+    case 'webrtc':             return 'Не удалось установить P2P даже через TURN. Скорее всего строгая блокировка — попробуй мобильный интернет или VPN.';
+    case 'ssl-unavailable':    return 'Проблема с SSL. Открой страницу через HTTPS.';
+    default:                   return 'Ошибка: ' + type;
+  }
+}
+
+/* Выбор сигнального сервера: первые 2 попытки — основной, дальше — fallback */
+function pickSignalServer(attempt){
+  return (attempt < 2) ? SIGNAL_SERVER : FALLBACK_SIGNAL_SERVER;
+}
+function signalHostLabel(attempt){
+  return (attempt < 2) ? 'основной сервер' : 'резервный сервер';
+}
+
+function setupConnection(c, host){
+  const myConn = c;
+  conn = c;
+
+  const onOpen = () => {
+    if (conn !== myConn) return;
+    if (connected) return;
+    connected = true;
+    peerBusy = false;
+    setupPhase = 'playing';
+    clearTimeout(connectTimeout);
+    connectTimeout = null;
+    send({ t:'hello', name: myName });
+  };
+  c.on('open', onOpen);
+  if (c.open) onOpen();
+
+  try {
+    const pc = c.peerConnection;
+    if (pc && !isHost){
+      pc.addEventListener('iceconnectionstatechange', () => {
+        if (conn !== myConn) return;
+        if (connected) return;
+        const st = pc.iceConnectionState;
+        if (st === 'checking') setMenuStatus('Проверяем соединение…');
+        else if (st === 'failed'){
+          setMenuStatus('P2P не установилось даже через TURN. Попробуй мобильный интернет или VPN.', true);
+          peerBusy = false;
+          setupPhase = 'idle';
+          destroyPeer();
+        }
+      });
+    }
+  } catch(e){}
+
+  c.on('data', o => {
+    if (conn !== myConn) return;
+    if (o.t === 'hello'){
+      if (isHost && game.state === 'menu') startGame();
+    }
+    else if (o.t === 'input' && isHost){
+      remoteIntent = o.intent;
+    }
+    else if (o.t === 'state' && !isHost){
+      applySnapshot(o);
+      $('menu').classList.remove('show');
+      $('lobby').classList.remove('show');
+      $('hud').classList.remove('hidden');
+    }
+  });
+  c.on('close', () => {
+    if (conn !== myConn) return;
+    connected = false;
+    peerBusy = false;
+    setupPhase = 'idle';
+    clearTimeout(connectTimeout);
+    game.state = 'menu';
+    $('hud').classList.add('hidden');
+    $('menu').classList.add('show');
+    $('lobby').classList.remove('show');
+    setMenuStatus('Соединение потеряно. Можно создать/войти снова.', true);
+  });
+  c.on('error', () => {
+    if (conn !== myConn) return;
+    connected = false;
+    peerBusy = false;
+    setupPhase = 'idle';
+    setMenuStatus('Ошибка соединения. Попробуй ещё раз.', true);
+  });
+}
+
+function startGame(){
+  resetGameState();
+  game.state = 'play';
+  $('menu').classList.remove('show');
+  $('lobby').classList.remove('show');
+  $('hud').classList.remove('hidden');
+}
+
+/* Сериализация снимка состояния (host -> guest) */
+function buildSnapshot(){
+  return {
+    t: 'state',
+    p1: snapPlayer(game.players[0]),
+    p2: snapPlayer(game.players[1]),
+    enemies: game.enemies.map(snapEnemy),
+    projectiles: game.projectiles.map(snapProj),
+    pickups: game.pickups.map(snapPickup),
+    pending: game.pending.map(p => ({ type: p.type, x: p.x, y: p.y, t: p.t })),
+    wave: { num: game.wave.num, phase: game.wave.phase, t: game.wave.t, timer: game.wave.timer, dur: game.wave.dur },
+    score: game.score, coins: game.coins,
+    level: game.level, xp: game.xp, xpNext: game.xpNext,
+    wavesCleared: game.wavesCleared,
+    gameState: game.state,
+    deathTimer: game.deathTimer,
+    shake: game.shake,
+    hurtFlash: game.hurtFlash
+  };
+}
+function snapPlayer(p){
+  return {
+    x: Math.round(p.x*10)/10, y: Math.round(p.y*10)/10,
+    vx: Math.round(p.vx*10)/10, vy: Math.round(p.vy*10)/10,
+    facing: p.facing, anim: Math.round(p.anim*100)/100,
+    hp: Math.round(p.hp*10)/10, maxHp: p.maxHp,
+    dead: p.dead, invuln: Math.round(p.invuln*100)/100,
+    dashT: Math.round(p.dashT*100)/100,
+    attackT: Math.round(p.attackT*100)/100,
+    shootT: Math.round(p.shootT*100)/100,
+    onGround: p.onGround, regenT: Math.round(p.regenT*10)/10,
+    regenDelay: p.regenDelay, color: p.color, tag: p.tag,
+    fitness: Math.round(p.fitness*10)/10
+  };
+}
+function snapEnemy(e){
+  return {
+    x: Math.round(e.x*10)/10, y: Math.round(e.y*10)/10,
+    w: e.w, h: e.h, hp: Math.round(e.hp*10)/10, maxHp: Math.round(e.maxHp*10)/10,
+    facing: e.facing, anim: Math.round(e.anim*100)/100,
+    onGround: e.onGround, hitFlash: Math.round(e.hitFlash*100)/100,
+    type: e.type, color: e.color, alive: e.alive,
+    st: e.st, t: Math.round(e.t*100)/100
+  };
+}
+function snapProj(p){
+  return { x: Math.round(p.x*10)/10, y: Math.round(p.y*10)/10, r: p.r, friendly: p.friendly };
+}
+function snapPickup(k){
+  return { x: Math.round(k.x*10)/10, y: Math.round(k.y*10)/10, type: k.type, r: k.r, bob: k.bob };
+}
+function applySnapshot(s){
+  for (let i = 0; i < 2; i++){
+    const p = game.players[i];
+    const src = i === 0 ? s.p1 : s.p2;
+    p.x = src.x; p.y = src.y;
+    p.vx = src.vx; p.vy = src.vy;
+    p.facing = src.facing; p.anim = src.anim;
+    p.hp = src.hp; p.maxHp = src.maxHp;
+    p.dead = src.dead; p.invuln = src.invuln;
+    p.dashT = src.dashT; p.attackT = src.attackT; p.shootT = src.shootT;
+    p.onGround = src.onGround;
+    p.regenT = src.regenT; p.regenDelay = src.regenDelay;
+    p.color = src.color; p.tag = src.tag;
+    p.fitness = src.fitness;
+  }
+  game.enemies = s.enemies.map(e => ({ ...e, _dashHit: false, contactCd: 0, jumpCd: 0, kb: 0, vy: 0 }));
+  game.projectiles = s.projectiles.map(p => ({ ...p, vx: 0, vy: 0, life: 1, damage: 0, pierce: 0 }));
+  game.pickups = s.pickups.map(k => ({ ...k, vx: 0, vy: 0, life: 0, value: 1, magnet: false }));
+  game.pending = s.pending.map(p => ({ ...p }));
+  Object.assign(game.wave, s.wave);
+  game.score = s.score;
+  game.coins = s.coins;
+  game.level = s.level;
+  game.xp = s.xp;
+  game.xpNext = s.xpNext;
+  game.wavesCleared = s.wavesCleared;
+  game.state = s.gameState;
+  game.deathTimer = s.deathTimer;
+  game.shake = s.shake;
+  game.hurtFlash = s.hurtFlash;
+}
+
+/* ---- Host: создание комнаты с retry + fallback ---- */
+function tryCreateHost(attempt){
+  destroyPeer();
+  const signal = pickSignalServer(attempt);
+  const p = new Peer('sf-'+genCode(), {
+    ...PEER_CONFIG,
+    host: signal.host,
+    port: signal.port,
+    path: signal.path,
+    secure: signal.secure
+  });
+  peer = p;
+  currentRoomCode = p.id.slice(3);
+  setupPhase = 'opening';
+  let settled = false;
+
+  const timeout = setTimeout(() => {
+    if (settled || peer !== p) return;
+    settled = true;
+    if (attempt < MAX_RETRIES) tryCreateHost(attempt + 1);
+    else {
+      setMenuStatus('Сервер не отвечает ни основной, ни резервный. Попробуй позже.', true);
+      peerBusy = false; setupPhase = 'idle'; destroyPeer();
+    }
+  }, 15000);
+
+  if (attempt === 0) setMenuStatus('Регистрируем комнату…');
+  else setMenuStatus('Попытка ' + (attempt+1) + '/' + (MAX_RETRIES+1) + ' (' + signalHostLabel(attempt) + ')…', 'warn');
+
+  p.on('open', () => {
+    if (peer !== p) return;
+    clearTimeout(timeout);
+    if (settled) return;
+    settled = true;
+    $('menu').classList.remove('show');
+    $('lobby').classList.add('show');
+    $('roomCode').textContent = currentRoomCode;
+    $('lobbyStatus').textContent = 'Ожидание второго игрока…';
+    $('lobbyStatus').className = '';
+  });
+
+  p.on('connection', c => {
+    if (peer !== p) return;
+    $('lobbyStatus').textContent = 'Игрок подключается…';
+    setupConnection(c, true);
+    clearTimeout(connectTimeout);
+    connectTimeout = setTimeout(() => {
+      if (peer === p && !connected){
+        $('lobbyStatus').textContent = 'Гость не подключился за 25 сек. Попробуй создать комнату заново.';
+        $('lobbyStatus').className = 'warn';
+      }
+    }, 25000);
+  });
+
+  p.on('error', e => {
+    if (peer !== p) return;
+    clearTimeout(timeout);
+    const transient = (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error');
+    if (settled){
+      if (transient){
+        try { p.reconnect(); } catch(err){}
+      } else if (e.type === 'unavailable-id'){
+        if (attempt < MAX_RETRIES) tryCreateHost(attempt + 1);
+        else { setMenuStatus('Не удалось занять код.', true); peerBusy = false; setupPhase = 'idle'; destroyPeer(); }
+      } else {
+        setMenuStatus(getErrorText(e.type), true);
+      }
+      return;
+    }
+    settled = true;
+    if (transient && attempt < MAX_RETRIES){
+      setTimeout(() => tryCreateHost(attempt + 1), 1200 * (attempt + 1));
+    } else {
+      setMenuStatus(getErrorText(e.type), true);
+      peerBusy = false; setupPhase = 'idle'; destroyPeer();
+    }
+  });
+
+  p.on('disconnected', () => {
+    if (peer === p && !p.destroyed && p.disconnected){
+      setTimeout(() => {
+        if (peer === p && !p.destroyed && p.disconnected){
+          try { p.reconnect(); } catch(err){}
+        }
+      }, 1000);
+    }
+  });
+}
+
+/* ---- Guest: подключение с retry + fallback ---- */
+function tryJoinHost(attempt){
+  destroyPeer();
+  const signal = pickSignalServer(attempt);
+  const p = new Peer({
+    ...PEER_CONFIG,
+    host: signal.host,
+    port: signal.port,
+    path: signal.path,
+    secure: signal.secure
+  });
+  peer = p;
+  setupPhase = 'opening';
+  let settled = false;
+
+  const timeout = setTimeout(() => {
+    if (settled || peer !== p) return;
+    settled = true;
+    if (attempt < MAX_RETRIES) tryJoinHost(attempt + 1);
+    else {
+      setMenuStatus('Сервер не отвечает ни основной, ни резервный. Попробуй позже.', true);
+      peerBusy = false; setupPhase = 'idle'; destroyPeer();
+    }
+  }, 15000);
+
+  if (attempt === 0) setMenuStatus('Получаем ID от сервера…');
+  else setMenuStatus('Попытка ' + (attempt+1) + '/' + (MAX_RETRIES+1) + ' (' + signalHostLabel(attempt) + ')…', 'warn');
+
+  p.on('open', () => {
+    if (peer !== p) return;
+    clearTimeout(timeout);
+    if (settled) return;
+    settled = true;
+    setupPhase = 'connecting';
+    setMenuStatus('Ищем комнату и соединяемся…');
+    const c = p.connect('sf-'+currentRoomCode, { reliable: true });
+    setupConnection(c, false);
+    clearTimeout(connectTimeout);
+    connectTimeout = setTimeout(() => {
+      if (peer === p && !connected){
+        setMenuStatus('Долго нет ответа. Проверь код и сеть.', true);
+        peerBusy = false; setupPhase = 'idle'; destroyPeer();
+      }
+    }, 25000);
+  });
+
+  p.on('error', e => {
+    if (peer !== p) return;
+    clearTimeout(timeout);
+    const transient = (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error');
+
+    if (settled){
+      if (e.type === 'peer-unavailable'){
+        if (attempt < 1){
+          setMenuStatus('Комната ещё не зарегистрирована, повторяем…', 'warn');
+          setTimeout(() => tryJoinHost(attempt + 1), 2000);
+        } else {
+          setMenuStatus('Комната не найдена. Проверь код.', true);
+          peerBusy = false; setupPhase = 'idle'; destroyPeer();
+        }
+        return;
+      }
+      if (transient){
+        try { p.reconnect(); } catch(err){}
+      } else {
+        setMenuStatus(getErrorText(e.type), true);
+      }
+      return;
+    }
+
+    settled = true;
+    if (transient && attempt < MAX_RETRIES){
+      setTimeout(() => tryJoinHost(attempt + 1), 1200 * (attempt + 1));
+    } else {
+      setMenuStatus(getErrorText(e.type), true);
+      peerBusy = false; setupPhase = 'idle'; destroyPeer();
+    }
+  });
+
+  p.on('disconnected', () => {
+    if (peer === p && !p.destroyed && p.disconnected){
+      setTimeout(() => {
+        if (peer === p && !p.destroyed && p.disconnected){
+          try { p.reconnect(); } catch(err){}
+        }
+      }, 1000);
+    }
+  });
+}
+
+/* Кнопки меню */
+$('btnCreate').addEventListener('click', () => {
+  if (peerBusy) return;
+  peerBusy = true;
+  myName = $('nameInput').value.trim() || "Хост";
+  isHost = true;
+  tryCreateHost(0);
+});
+$('btnJoin').addEventListener('click', () => {
+  if (peerBusy) return;
+  const code = $('codeInput').value.trim().toUpperCase();
+  if (code.length !== 6){ setMenuStatus('Код — 6 символов', true); return; }
+  peerBusy = true;
+  myName = $('nameInput').value.trim() || "Гость";
+  isHost = false;
+  currentRoomCode = code;
+  tryJoinHost(0);
+});
+$('btnCopy').addEventListener('click', () => {
+  const code = $('roomCode').textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(code).then(() => {
+      $('lobbyStatus').textContent = 'Скопировано!';
+      $('lobbyStatus').className = '';
+    }).catch(() => {
+      $('lobbyStatus').textContent = 'Выдели код вручную';
+    });
+  } else {
+    $('lobbyStatus').textContent = 'Выдели код вручную';
+  }
+});
+
+/* ================================ HOST TICK ================================ */
+function tickHost(dt){
+  game.players[0].intent = getLocalInput();
+  game.players[1].intent = remoteIntent;
+
+  for (let i = 0; i < 2; i++){
+    const p = game.players[i];
+    if (p.dead) continue;
+    if (p.intent.dash)   tryDash(p);
+    if (p.intent.attack) tryAttack(p);
+    if (p.intent.shoot)  tryShoot(p);
+    updatePlayerPhysics(p, dt);
+  }
+  updateEnemies(dt);
+  updateProjectiles(dt);
+  updatePickups(dt);
+  updateWaves(dt);
+
+  for (const p of game.players){
+    if (p.dead) continue;
+    const hpPct = p.hp / p.maxHp;
+    if (hpPct < 0.40){
+      const t = (0.40 - hpPct) / 0.40;
+      p.fitness -= t * 3.0 * dt;
+    }
+  }
+  for (const p of game.players) if (!p.dead) fixInsideWall(p);
+  for (const e of game.enemies) if (e.alive) fixInsideWall(e);
+  return game.players.every(p => p.dead);
+}
+
+/* ================================ UPDATE ================================ */
+function update(dt){
+  if (game.shake > 0)     game.shake     = Math.max(0, game.shake - dt*70);
+  if (game.hurtFlash > 0) game.hurtFlash = Math.max(0, game.hurtFlash - dt);
+
+  for (let i = game.dashTrail.length - 1; i >= 0; i--){
+    game.dashTrail[i].life -= dt;
+    if (game.dashTrail[i].life <= 0) game.dashTrail.splice(i, 1);
+  }
+  if (game.dashTrail.length > MAX_TRAIL_SEGMENTS){
+    game.dashTrail.splice(0, game.dashTrail.length - MAX_TRAIL_SEGMENTS);
+  }
+  updateParticles(dt);
+
+  if (game.state === 'play'){
+    game.time += dt;
+    if (isHost){
+      const over = tickHost(dt);
+      if (over){ game.state = 'dying'; game.deathTimer = 3.0; }
+    } else {
+      if (connected && conn && conn.open){
+        netTimer += dt;
+        if (netTimer >= NET_RATE){
+          netTimer = 0;
+          send({ t:'input', intent: getLocalInput() });
+        }
+      }
+    }
+  }
+  else if (game.state === 'dying'){
+    game.deathTimer -= dt;
+    if (game.deathTimer <= 0){
+      if (isHost){
+        resetGameState();
+        game.state = 'play';
+      }
+    }
+  }
+}
+
+/* ================================ RENDER ================================ */
+let roomCache = null;
+function paintRoom(c){
+  const g = c.createLinearGradient(0, 0, 0, FLOOR_Y);
+  g.addColorStop(0, '#1b1f26'); g.addColorStop(0.6, '#12151a'); g.addColorStop(1, '#0b0d10');
+  c.fillStyle = g; c.fillRect(0, 0, VW, FLOOR_Y);
+  c.strokeStyle = 'rgba(140,165,200,0.045)'; c.lineWidth = 1;
+  c.beginPath();
+  for (let x = WALL; x < VW - WALL; x += 64){ c.moveTo(x, 30); c.lineTo(x, FLOOR_Y); }
+  for (let y = 30; y < FLOOR_Y; y += 64){ c.moveTo(WALL, y); c.lineTo(VW - WALL, y); }
+  c.stroke();
+  for (const lx of [230, 640, 1050]){
+    c.fillStyle = '#232833'; c.fillRect(lx - 52, 30, 104, 9);
+    c.fillStyle = 'rgba(175,200,230,0.20)'; c.fillRect(lx - 46, 39, 92, 3);
+  }
+  c.fillStyle = '#191c22'; c.fillRect(0, FLOOR_Y, VW, VH - FLOOR_Y);
+  c.fillStyle = '#2e333c'; c.fillRect(0, FLOOR_Y, VW, 4);
+  c.fillStyle = '#23272f'; c.fillRect(0, 0, WALL, VH); c.fillRect(VW - WALL, 0, WALL, VH);
+  c.fillStyle = '#343a45'; c.fillRect(WALL - 4, 0, 4, VH); c.fillRect(VW - WALL, 0, 4, VH);
+  c.fillStyle = '#20242c'; c.fillRect(0, 0, VW, 26);
+  c.fillStyle = '#2c313a'; c.fillRect(0, 24, VW, 3);
+  for (const p of platforms){
+    c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(p.x, p.y + p.h, p.w, 5);
+    c.fillStyle = '#20242b'; c.fillRect(p.x, p.y, p.w, p.h);
+    c.fillStyle = '#333945'; c.fillRect(p.x, p.y, p.w, 3);
+    c.fillStyle = 'rgba(150,175,205,0.10)'; c.fillRect(p.x + 6, p.y + 7, p.w - 12, 2);
+  }
+}
+function buildRoomCache(){
+  roomCache = document.createElement('canvas');
+  roomCache.width = VW * 2;
+  roomCache.height = VH * 2;
+  const c = roomCache.getContext('2d');
+  c.scale(2, 2);
+  paintRoom(c);
+}
+function drawRoom(){
+  if (!roomCache) buildRoomCache();
+  ctx.drawImage(roomCache, 0, 0, VW, VH);
+}
+
+function drawStickman(cx, feetY, h, color, o){
+  o = o || {};
+  const phase = o.phase || 0, facing = o.facing || 1, airborne = !!o.airborne;
+  const lw = Math.max(2.4, h * 0.062);
+  const headR = h * 0.125, headCY = feetY - h + headR;
+  const shoulderY = feetY - h * 0.70, hipY = feetY - h * 0.44;
+  const legLen = feetY - hipY, armLen = h * 0.30;
+  ctx.save(); ctx.translate(cx, 0); ctx.scale(facing, 1);
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  const s = Math.sin(phase);
+  ctx.beginPath();
+  ctx.moveTo(0, headCY + headR*0.85); ctx.lineTo(0, hipY);
+  const la = airborne ? 0.85 : s * 0.70, lb = airborne ? -0.50 : -s * 0.70;
+  addLimb(0, hipY, la, legLen, airborne ? 1.90 : 0.75);
+  addLimb(0, hipY, lb, legLen, airborne ? 0.55 : 0.75);
+  const aa = airborne ? 2.50 : -s * 0.85 - 0.12;
+  const ab = airborne ? -2.20 : s * 0.85 - 0.12;
+  addLimb(0, shoulderY, aa, armLen, 0.55);
+  addLimb(0, shoulderY, ab, armLen, 0.55);
+  ctx.stroke();
+
+  ctx.beginPath(); ctx.arc(0, headCY, headR, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(headR*0.42, headCY - headR*0.12, Math.max(1.3, headR*0.17), 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+
+  function addLimb(x0, y0, ang, len, bend){
+    const t1 = len * 0.55, t2 = len * 0.45;
+    const kx = x0 + Math.sin(ang) * t1, ky = y0 + Math.cos(ang) * t1;
+    const a2 = ang * bend;
+    const ex = kx + Math.sin(a2) * t2, ey = ky + Math.cos(a2) * t2;
+    ctx.moveTo(x0, y0); ctx.lineTo(kx, ky); ctx.lineTo(ex, ey);
+  }
+}
+function drawSpawnMarkers(){
+  for (const s of game.pending){
+    if (s.t > 0.6) continue;
+    const a = clamp(1 - s.t / 0.6, 0, 1);
+    const T = TYPES[s.type];
+    const y = (s.y === null || s.y === undefined) ? FLOOR_Y - T.h : s.y;
+    ctx.save(); ctx.globalAlpha = a * 0.85;
+    ctx.strokeStyle = T.color; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(s.x + T.w/2, y + T.h/2, 22 + (1-a)*20, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawProjectiles(){
+  for (const b of game.projectiles){
+    ctx.fillStyle = b.friendly ? 'rgba(216,200,255,0.22)' : 'rgba(255,157,128,0.22)';
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 2.4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = b.friendly ? '#d8c8ff' : '#ff9d80';
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill();
+  }
+}
+function drawPickups(){
+  const now = performance.now() / 1000;
+  for (const k of game.pickups){
+    const bob = Math.sin(now*6 + (k.bob||0)) * 1.5;
+    const r = k.r || 6;
+    ctx.save(); ctx.translate(k.x, k.y + bob);
+    if (k.type === 'coin'){
+      ctx.fillStyle = 'rgba(232,193,90,0.22)';
+      ctx.beginPath(); ctx.arc(0, 0, r*2.2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#e8c15a';
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath(); ctx.arc(-r*0.35, -r*0.35, r*0.35, 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.fillStyle = 'rgba(127,224,160,0.22)';
+      ctx.beginPath(); ctx.moveTo(0, -r*2); ctx.lineTo(r*2, 0); ctx.lineTo(0, r*2); ctx.lineTo(-r*2, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#7fe0a0';
+      ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r, 0); ctx.lineTo(0, r); ctx.lineTo(-r, 0); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function drawEnemies(){
+  for (const e of game.enemies){
+    if (!e.alive) continue;
+    const cx = e.x + e.w/2, feetY = e.y + e.h;
+    const col = (e.hitFlash > 0) ? '#ffffff' : (e.color || '#ff3b3b');
+    if (e.type === 'brute' && e.st === 'windup'){
+      const k = 1 - e.t / 0.5;
+      ctx.strokeStyle = 'rgba(255,60,60,' + (0.25 + k*0.55) + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, e.y + e.h/2, 38 + k*16, 0, Math.PI*2); ctx.stroke();
+    }
+    drawStickman(cx, feetY, e.h, col, { phase: e.anim || 0, facing: e.facing || 1, airborne: !e.onGround });
+    if (e.hp < e.maxHp){
+      const bw = e.w + 16;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(cx - bw/2, e.y - 13, bw, 4);
+      ctx.fillStyle = '#ff5b5b'; ctx.fillRect(cx - bw/2, e.y - 13, bw * Math.max(0, e.hp/e.maxHp), 4);
+    }
+  }
+}
+function drawPlayerOne(p){
+  if (p.dead) return;
+  const blink = p.invuln > 0 && p.dashT <= 0 && Math.floor(performance.now() / 55) % 2 === 0;
+  if (!blink){
+    drawStickman(p.x + p.w/2, p.y + p.h, 60, p.color, { phase: p.anim || 0, facing: p.facing || 1, airborne: !p.onGround });
+  }
+  if (p.attackT > 0){
+    const k = 1 - p.attackT / 0.24;
+    ctx.save(); ctx.translate(p.x + p.w/2 + p.facing*10, p.y + p.h*0.48); ctx.scale(p.facing, 1);
+    ctx.globalAlpha = (1 - k) * 0.95;
+    ctx.strokeStyle = '#bfe0ff'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    const ang = lerp(-1.15, 1.05, k);
+    ctx.beginPath(); ctx.arc(0, 0, 42, ang - 0.55, ang + 0.55); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawDashTrail(){
+  for (const t of game.dashTrail){
+    const a = (t.life / TRAIL_LIFE) * 0.38;
+    if (a <= 0) continue;
+    ctx.save(); ctx.globalAlpha = a;
+    drawStickman(t.x + 13, t.y + 60, 60, t.color, { phase: 0, facing: t.facing, airborne: true });
+    ctx.restore();
+  }
+}
+function drawParticles(){
+  for (const q of game.particles){
+    ctx.globalAlpha = clamp(q.life / 0.6, 0, 1);
+    ctx.fillStyle = q.color;
+    ctx.fillRect(q.x - q.size/2, q.y - q.size/2, q.size, q.size);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawBanner(){
+  if (game.state !== 'play' && game.state !== 'dying') return;
+  if (game.wave.phase === 'clear'){
+    const a = clamp(game.wave.t / 1.2, 0, 1);
+    if (a <= 0) return;
+    ctx.save(); ctx.globalAlpha = a * 0.95;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e8eef7';
+    ctx.font = 'bold 46px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    ctx.fillText('ВОЛНА ПРОЙДЕНА', VW/2, 250);
+    ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    return;
+  }
+  if (game.wave.phase !== 'intermission') return;
+  const a = clamp(Math.min((game.wave.dur - game.wave.t) / 0.35, game.wave.t / 0.45, 1), 0, 1);
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e8eef7';
+  ctx.font = 'bold 62px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillText('ВОЛНА ' + (game.wave.num + 1), VW/2, 250);
+  ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+function drawDyingOverlay(){
+  if (game.state !== 'dying') return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e8eef7';
+  ctx.font = 'bold 42px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillText('ИГРА ОКОНЧЕНА', VW/2, VH/2 - 40);
+  ctx.fillStyle = '#8fa8c4';
+  ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillText('ПРОЙДЕНО ВОЛН: ' + game.wavesCleared, VW/2, VH/2 + 20);
+  ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+function render(){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#040507'; ctx.fillRect(0, 0, W, H);
+  if (game.state === 'menu') return;
+  ctx.save();
+  ctx.translate(offX, offY); ctx.scale(scale, scale);
+  if (game.shake > 0) ctx.translate((Math.random()-0.5)*game.shake, (Math.random()-0.5)*game.shake);
+  drawRoom(); drawDashTrail(); drawSpawnMarkers(); drawPickups(); drawProjectiles(); drawEnemies();
+  for (const p of game.players) drawPlayerOne(p);
+  drawParticles(); drawBanner(); drawDyingOverlay();
+  ctx.restore();
+  if (game.hurtFlash > 0){
+    const a = game.hurtFlash * 0.6;
+    const grd = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.22, W/2, H/2, Math.max(W,H)*0.78);
+    grd.addColorStop(0, 'rgba(255,50,50,0)');
+    grd.addColorStop(1, 'rgba(255,40,40,' + a + ')');
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+/* ================================ HUD ================================ */
+const hudEl = $('hud');
+const p1hpEl = $('p1hp'), p1hpNEl = $('p1hpN');
+const p2hpEl = $('p2hp'), p2hpNEl = $('p2hpN');
+const xpFillEl = $('xpFill'), xpNumEl = $('xpNum');
+const lvlNumEl = $('lvlNum');
+const waveLblEl = $('waveLbl'), genLblEl = $('genLbl');
+const coinNumEl = $('coinNum'), scoreNumEl = $('scoreNum');
+
+function setText(el, v){ if (el._v !== v){ el._v = v; el.textContent = v; } }
+function setHtml(el, v){ if (el._h !== v){ el._h = v; el.innerHTML = v; } }
+
+function updateHUD(){
+  if (game.state === 'menu'){ hudEl.classList.add('hidden'); return; }
+  hudEl.classList.remove('hidden');
+  const p1 = game.players[0], p2 = game.players[1];
+  if (!p1 || !p2) return;
+  p1hpEl.style.width = Math.max(0, p1.hp / p1.maxHp * 100) + '%';
+  p2hpEl.style.width = Math.max(0, p2.hp / p2.maxHp * 100) + '%';
+  setText(p1hpNEl, String(Math.ceil(Math.max(0, p1.hp))));
+  setText(p2hpNEl, String(Math.ceil(Math.max(0, p2.hp))));
+  xpFillEl.style.width = (Math.max(0, game.xp) / game.xpNext * 100) + '%';
+  setText(xpNumEl, game.xp + '/' + game.xpNext);
+  setText(lvlNumEl, String(game.level));
+  const inFight = game.wave.phase === 'fight' || game.wave.phase === 'clear';
+  const waveNum = inFight ? game.wave.num : game.wave.num + 1;
+  setText(waveLblEl, 'ВОЛНА ' + waveNum);
+  const totalFit = (p1.fitness||0) + (p2.fitness||0);
+  setHtml(genLblEl, 'ОЧКИ <b>' + Math.round(totalFit) + '</b> · FPS ' + fpsDisplay);
+  setText(coinNumEl, String(game.coins));
+  setText(scoreNumEl, String(game.score));
+}
+
+/* ================================ LOOP ================================ */
+let lastT = 0;
+function frame(t){
+  if (!lastT) lastT = t;
+  let dt = (t - lastT) / 1000;
+  lastT = t;
+  dt = Math.min(dt, 0.05);
+  update(dt);
+  render();
+  updateHUD();
+
+  fpsAcc += dt; fpsCount++;
+  if (fpsAcc >= 0.5){
+    fpsDisplay = Math.round(fpsCount / fpsAcc);
+    fpsAcc = 0; fpsCount = 0;
+  }
+
+  if (isHost && connected && game.state !== 'menu'){
+    netTimer += dt;
+    if (netTimer >= NET_RATE){
+      netTimer = 0;
+      send(buildSnapshot());
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+
+/* ================================ INIT ================================ */
+resize();
+resetGameState();
+game.state = 'menu';
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
